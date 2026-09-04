@@ -1636,7 +1636,12 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
 
         if request.ref_audio is None:
             prompt_ids = adapter.build_prompt(request.input)
-            return tokens_input(prompt_token_ids=prompt_ids)
+            prompt = tokens_input(prompt_token_ids=prompt_ids)
+            # The forced-aligner stage reads the text to align from
+            # ``additional_information["text"]`` (see
+            # ``stage_input_processors.forced_aligner.code2wav2aligner``).
+            prompt["additional_information"] = {"text": [request.input]}
+            return prompt
 
         # Voice clone
         from vllm_omni.model_executor.models.higgs_audio_v3.higgs_audio_v3_tokenizer import (
@@ -1665,6 +1670,7 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
         import torch
 
         prompt["additional_information"] = {
+            "text": [request.input],
             "audio_input_ids": ref_codes_delayed.to(torch.long),
             "audio_input_ids_mask": torch.ones(ref_codes_delayed.shape[0], dtype=torch.bool),
             "ref_audio_cache_key": cache_key,
