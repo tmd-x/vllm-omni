@@ -3843,6 +3843,22 @@ async def omni_wakeup(request: OmniWakeupRequest, raw_request: Request):
     return {"status": "SUCCESS", "acks": [dataclasses.asdict(a) if dataclasses.is_dataclass(a) else a for a in acks]}
 
 
+@router.post("/v1/omni/resume")
+async def omni_resume(request: OmniWakeupRequest, raw_request: Request):
+    """Reopen the frontend admission gate that ``sleep`` closed.
+
+    ``wake_up`` restores device memory but deliberately leaves the frontend
+    ``_paused`` gate set; only ``resume_generation`` clears it. Without a route
+    for it, a stage slept and woken over HTTP accepts requests that then hang
+    until they time out, because admission never reopens.
+    """
+    engine_client = raw_request.app.state.engine_client
+    if not hasattr(engine_client, "resume_generation"):
+        raise HTTPException(status_code=501, detail="Engine does not support resume_generation")
+    await engine_client.resume_generation(stage_ids=request.stage_ids)
+    return {"status": "SUCCESS", "stage_ids": request.stage_ids}
+
+
 if __name__ == "__main__":
     parser = TrackingArgumentParser(description="vLLM-Omni OpenAI-Compatible REST API server")
     parser = make_arg_parser(parser)
