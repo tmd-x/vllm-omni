@@ -615,6 +615,7 @@ async def omni_run_server_worker(listen_address, sock, args, client_config=None,
             ssl_ciphers=args.ssl_ciphers,
             h11_max_incomplete_event_size=args.h11_max_incomplete_event_size,
             h11_max_header_count=args.h11_max_header_count,
+            ws_per_message_deflate=getattr(args, "ws_per_message_deflate", True),
             **uvicorn_kwargs,
         )
 

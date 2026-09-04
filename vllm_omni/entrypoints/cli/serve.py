@@ -270,6 +270,19 @@ class OmniServeCommand(CLISubcommand):
             "sharing an existing stage's GPU when unset.",
         )
         omni_config_group.add_argument(
+            "--no-ws-per-message-deflate",
+            dest="ws_per_message_deflate",
+            action="store_false",
+            default=True,
+            help=(
+                "Decline the WebSocket permessage-deflate extension (RFC 7692). "
+                "Needed behind proxies that implement RFC 6455 but not RFC 7692: "
+                "they strip the extension from the 101 response without stopping "
+                "the origin negotiating it, so the client is told no compression "
+                "was agreed and then receives compressed frames."
+            ),
+        )
+        omni_config_group.add_argument(
             "--deploy-config",
             type=str,
             default=None,
