@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.core_model, pytest.mark.cpu]
 
 def test_inject_appends_pooling_aligner_stage():
     pipeline = _PIPELINE_REGISTRY["qwen3_tts"]
-    deploy = DeployConfig()
+    deploy = DeployConfig(async_chunk=False)
     n0 = len(pipeline.stages)
 
     ext_pipeline, ext_deploy = inject_forced_aligner_stage(
@@ -49,7 +49,7 @@ def test_inject_appends_pooling_aligner_stage():
 def test_inject_from_config_only():
     # --forced-aligner-config alone (model in the YAML) must also inject.
     pipeline = _PIPELINE_REGISTRY["qwen3_tts"]
-    deploy = DeployConfig()
+    deploy = DeployConfig(async_chunk=False)
     n0 = len(pipeline.stages)
 
     ext_pipeline, ext_deploy = inject_forced_aligner_stage(
@@ -64,6 +64,28 @@ def test_inject_from_config_only():
 def test_inject_noop_without_forced_aligner():
     pipeline = _PIPELINE_REGISTRY["qwen3_tts"]
     deploy = DeployConfig()
+
+    ext_pipeline, ext_deploy = inject_forced_aligner_stage(pipeline, deploy, {})
+
+    assert ext_pipeline is pipeline
+    assert len(ext_deploy.stages) == 0
+
+
+def test_inject_rejects_async_chunk():
+    # async_chunk routes the stage to WAITING_FOR_CHUNK, where the Code2Wav
+    # stage has no producer to feed it; without this guard the pipeline boots
+    # and every request silently stalls until VLLM_OMNI_INPUT_WAIT_TIMEOUT_S.
+    pipeline = _PIPELINE_REGISTRY["qwen3_tts"]
+    deploy = DeployConfig(async_chunk=True)
+
+    with pytest.raises(ValueError, match="async_chunk=False"):
+        inject_forced_aligner_stage(pipeline, deploy, {"forced_aligner": "/models/Qwen3-ForcedAligner-0.6B"})
+
+
+def test_inject_noop_without_forced_aligner_ignores_async_chunk():
+    # The guard must not fire for pipelines that never asked for an aligner.
+    pipeline = _PIPELINE_REGISTRY["qwen3_tts"]
+    deploy = DeployConfig(async_chunk=True)
 
     ext_pipeline, ext_deploy = inject_forced_aligner_stage(pipeline, deploy, {})
 

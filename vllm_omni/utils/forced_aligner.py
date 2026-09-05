@@ -113,6 +113,31 @@ def inject_forced_aligner_stage(
     if fa is None:
         return pipeline, deploy
 
+    # The aligner is fed by ``code2wav2aligner``, a synchronous
+    # ``custom_process_input_func``, and that hook only runs on the
+    # full-payload path: ``uses_full_payload_input_coordinator`` returns False
+    # for any stage carrying ``async_chunk`` before it ever reads
+    # ``requires_full_payload_input``. Under ``async_chunk`` the injected stage
+    # therefore parks in WAITING_FOR_CHUNK on the edge from the Code2Wav stage
+    # -- an edge with no sender, since TTS pipelines put their async-chunk
+    # producer on the *talker* stage and their Code2Wav stage has none.
+    #
+    # Nothing downstream notices: the sender-side validator in
+    # ``merge_pipeline_deploy`` only asserts that *some* stage has an
+    # async-chunk producer, not that every edge does, so the pipeline boots
+    # clean and each request instead waits out VLLM_OMNI_INPUT_WAIT_TIMEOUT_S
+    # (600s by default) before being marked FINISHED_ERROR. To a caller that is
+    # indistinguishable from a hung request. Refuse the combination here, where
+    # the cause still has a name.
+    if deploy.async_chunk:
+        raise ValueError(
+            "The forced aligner requires async_chunk=False: it is fed by a "
+            "synchronous custom_process_input_func that never runs on the "
+            "async-chunk path, so the stage would wait for chunks nobody "
+            "sends. Pass --no-async-chunk, or set async_chunk: false in the "
+            "deploy YAML."
+        )
+
     _FA = "vllm_omni.model_executor.stage_input_processors.forced_aligner"
     new_id = len(pipeline.stages)
     aligner_ps = StagePipelineConfig(
